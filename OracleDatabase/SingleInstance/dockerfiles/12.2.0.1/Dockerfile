@@ -57,7 +57,7 @@ ENV PATH=$ORACLE_HOME/bin:$ORACLE_HOME/OPatch/:/usr/sbin:$PATH \
     LD_LIBRARY_PATH=$ORACLE_HOME/lib:/usr/lib \
     CLASSPATH=$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
 
-wget -q -O linuxx64_12201_database.zip "https://www.dropbox.com/s/maex8fu98o6j0xj/linuxx64_12201_database.zip?dl=0"
+RUN wget -q -O linuxx64_12201_database.zip "https://www.dropbox.com/s/maex8fu98o6j0xj/linuxx64_12201_database.zip?dl=0"
 
 # Copy files needed during both installation and runtime
 # -------------
