@@ -1,15 +1,10 @@
-# Copyright (c) 2020 Oracle and/or its affiliates.
+# Copyright (c) 2020, 2022 Oracle and/or its affiliates.
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
-FROM oraclelinux:8-slim
 
-LABEL "provider"="Oracle"                                               \
-      "issues"="https://github.com/oracle/docker-images/issues"
+FROM ghcr.io/oracle/oraclelinux:8
 
-COPY nodejs.module /etc/dnf/modules.d/nodejs.module
-
-RUN microdnf install nodejs \
-                     nodejs-nodemon \
-                     npm && \
-    microdnf clean all
+RUN dnf -y module enable nodejs:10 && \
+    dnf -y install nodejs npm && \
+    rm -rf /var/cache/dnf
 
 CMD ["/bin/node", "-v"]

@@ -1,53 +1,57 @@
-Tuxedo on Docker
-===============
-Sample Docker configurations to facilitate installation, configuration, and environment setup for DevOps users. This project includes Dockerfiles for Tuxedo 12.1.3, and 12.2.2 based on Oracle Linux and Oracle JDK 8 (Server).
+# Oracle Tuxedo Core Container Image
 
-The certification of Tuxedo on Docker does not require the use of any file presented in this repository. Customers and users are welcome to use them as starters, and customize/tweak, or create from scratch new scripts and Dockerfiles.
+This sample container image is provided to facilitate installation, configuration and environment setup of Tuxedo 22.1.0.0.0. The image is based on Oracle Linux 7 and Oracle JDK 8 (ServerJRE).
+
+The certification of Tuxedo when run within a container does not require the use of any file presented in this repository. Customers and users are welcome to use them as references that can be customized, or choose to create new container images from scratch.
 
 For pre-built images containing Oracle software, please check the [Oracle Container Registry](https://container-registry.oracle.com/).
 
 ## Contents
-This folder contains the information and examples of how to use [Tuxedo](http://oracle.com/tuxedo) with [Docker](https://www.docker.com/).
 
-How to build and run
+This folder contains the information and examples of how to deploy Oracle Tuxedo in a container.
 
-This project offers Dockerfiles for Tuxedo 12cR2 (12.1.3.0) and Tuxedo 12cR2 (12.2.2.0). To assist in building the images, you can use the buildDockerImage.sh script. See below for instructions and usage.
+## How to build and run
 
-The buildDockerImage.sh script is just a utility shell script that performs MD5 checks and is an easy way for beginners to get started. Expert users are welcome to directly call docker build with their prefered set of parameters.
-Building Oracle JDK (Server JRE) base image
+This project offers `Dockerfiles` for Tuxedo 22.1.0.0.0.
 
-You must first download the Oracle Server JRE binary and drop in folder ../OracleJava/java-8 and build that image. For more information, visit the [OracleJava](https://github.com/oracle/docker-images/blob/master/OracleJava) folder's [README](https://github.com/oracle/docker-images/blob/master/OracleJava/README.md) file.
+To assist in building the images, the `buildContainerImage.sh` simplifies the process of ensuring the correct binary archive is available before starting the build process. More experienced users are welcome to build the image using their preferred container engine or CI/CD tool.
 
-    $ cd ../OracleJava/java-8
-    $ sh build.sh
+## Building the Oracle JDK (Server JRE) base image
 
-Building Tuxedo Docker Install Images
-## To use
-1. Into an empty directory:
-  1. Download the Tuxedo 12.1.3 or 12.2.2 Linux 64bit installer from [OTN](http://www.oracle.com/technetwork/middleware/tuxedo/downloads/index.html)
-  2. Download all the files from this GitHub repository
-  3. Drop the downloaded Tuxedo installer to the corresponding version directory
-  4. Optionally download the latest Tuxedo rolling patch from My Oracle Support
-2. cd dockerfiles
-3. Execute './buildDockerImage.sh' to show the usage of the command. Follow [the guide](./dockerfiles/README.md) to create a docker image.
+The Tuxedo image uses the Oracle JDK 8 (Server JRE) container image as its base. Please follow the [Oracle Java image](https://github.com/oracle/docker-images/blob/master/OracleJava) documentation to build that image before continuing.
 
-You should end up with a docker image tagged oracle/tuxedo:version, for instance, oracle/tuxedo:12.2.2.
+## Building the Tuxedo Container Image
 
-You can then start the image in a new container with: ``docker run -d -v \${LOCAL_DIR}:/u01/oracle/user_projects oracle/tuxedo:<VERSION>``.
-Note: \${LOCAL_DIR} is a local dir which used in docker image as external storage, it can be any dir.
+1. Create a directory on your local system and download the following items into your local directory:
+   * [Tuxedo 22.1.0.0.0 Linux 64-bit installer](http://www.oracle.com/technetwork/middleware/tuxedo/downloads/index.html) from the Oracle Technology Network.
+   * A copy of this repository.
+   * (Optional) The latest Tuxedo rolling patch from My Oracle Support.
+2. Move the installer that you downloaded in the previous step to the appropriate version directory (e.g. 21.1.0.0.0) in your local copy of the repository.
+3. Change to the `OracleTuxedo/core/dockerfiles` directory in your local copy of the repository.
+4. Run './buildContainerImage.sh' to see the available parameters for this script and then follow the instructions in  [the documentation](./dockerfiles/README.md) to build the image.
 
+This process builds a container image named `oracle/tuxedo` tagged by version. For example, `oracle/tuxedo:22.1.0.0.0` and `oracle/tuxedo:latest`.
 
- * Tuxedo Distribution and Documentation
-   - For more information on the Tuxedo 12cR2 Distribution, visit [Tuxedo 12.1.3/12.2.2 Installer](http://www.oracle.com/technetwork/middleware/tuxedo/downloads/index.html).
+## Running the Tuxedo Container Image
 
-   - For more information on the Tuxedo 12cR2 Documentation, visit [Tuxedo 12.1.3](http://docs.oracle.com/cd/E53645_01/tuxedo/index.html), [Tuxedo 12.2.2](http://docs.oracle.com/cd/E72452_01/tuxedo/index.html).
+Once the container image is built, you can now start a container based on this image using the following command:
 
+```shell
+docker run -d -v "${LOCAL_DIR}:/u01/oracle/user_projects" oracle/tuxedo:22.1.0.0.0
+```
+
+Note: The `${LOCAL_DIR}` environment variable must resolve to a local directory in which the container can store data.
+
+## Tuxedo Distribution and Documentation
+
+* For more information on Tuxedo 22.1.0.0.0, visit [Tuxedo Installer](http://www.oracle.com/technetwork/middleware/tuxedo/downloads/index.html).
 
 ## License
-To download and run Tuxedo 12cR2 regardless of inside or outside a Docker container, you must download the binaries from Oracle website and accept the license indicated at that page.
 
-All scripts and files hosted in this project and GitHub [docker/OracleTuxedo](./) repository required to build the Docker images are, unless otherwise noted, released under [UPL 1.0](https://oss.oracle.com/licenses/upl/) license.
+To download and run Tuxedo 22.1.0.0.0, regardless of whether you are running Tuxedo with a CDB, non-CDB, or PDB, inside or outside a Container container, you must download the binaries from the Oracle website and accept the license indicated at that page.
+
+All scripts and files hosted in this repository required to build the container images are, unless otherwise noted, released under the [UPL 1.0](https://oss.oracle.com/licenses/upl/) license.
 
 ## Copyright
-Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
 
+Copyright (c) 2022 Oracle and/or its affiliates.

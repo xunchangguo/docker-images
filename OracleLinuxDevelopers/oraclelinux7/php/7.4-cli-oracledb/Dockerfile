@@ -2,9 +2,6 @@
 # Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl.
 FROM oraclelinux:7-slim
 
-LABEL "provider"="Oracle"                                               \
-      "issues"="https://github.com/oracle/docker-images/issues"
-
 RUN yum -y install oracle-php-release-el7 oracle-release-el7 && \
     yum -y install oracle-instantclient19.5-basic \
                    php-cli \
