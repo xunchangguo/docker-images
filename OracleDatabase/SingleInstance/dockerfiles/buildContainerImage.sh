@@ -6,13 +6,13 @@
 # 
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 # 
-# Copyright (c) 2014,2021 Oracle and/or its affiliates.
+# Copyright (c) 2014,2023 Oracle and/or its affiliates.
 # 
 
 usage() {
   cat << EOF
 
-Usage: buildContainerImage.sh -v [version] -t [image_name:tag] [-e | -s | -x] [-i] [-o] [container build option]
+Usage: buildContainerImage.sh -v [version] -t [image_name:tag] [-e | -s | -x | -f] [-i] [-p] [-b] [-o] [container build option]
 Builds a container image for Oracle Database.
 
 Parameters:
@@ -22,14 +22,17 @@ Parameters:
    -e: creates image based on 'Enterprise Edition'
    -s: creates image based on 'Standard Edition 2'
    -x: creates image based on 'Express Edition'
+   -f: creates images based on Database 'Free' 
    -i: ignores the MD5 checksums
+   -p: creates and extends image using the patching extension
+   -b: build base stage only (Used by extensions)
    -o: passes on container build option
 
-* select one edition only: -e, -s, or -x
+* select one edition only: -e, -s, -x, or -f
 
 LICENSE UPL 1.0
 
-Copyright (c) 2014,2021 Oracle and/or its affiliates.
+Copyright (c) 2014,2023 Oracle and/or its affiliates.
 
 EOF
 
@@ -39,7 +42,7 @@ EOF
 checksumPackages() {
   if hash md5sum 2>/dev/null; then
     echo "Checking if required packages are present and valid..."   
-    if ! md5sum -c "Checksum.${EDITION}"; then
+    if ! md5sum -c "Checksum.${EDITION}${PLATFORM}"; then
       echo "MD5 for required packages to build this image did not match!"
       echo "Make sure to download missing files in folder ${VERSION}."
       exit 1;
@@ -87,7 +90,7 @@ checkPodmanVersion() {
 checkDockerVersion() {
   # Get Docker Server version
   echo "Checking Docker version."
-  DOCKER_VERSION=$("${CONTAINER_RUNTIME}" version --format '{{.Server.Version | printf "%.5s" }}'|| exit 0)
+  DOCKER_VERSION=$("${CONTAINER_RUNTIME}" version --format '{{.Server.Version }}'|| exit 0)
   # Remove dot in Docker version
   DOCKER_VERSION=${DOCKER_VERSION//./}
 
@@ -103,14 +106,17 @@ checkDockerVersion() {
 ##############
 
 # Go into dockerfiles directory
-cd $(dirname $0)
+cd "$(dirname "$0")"
 
 # Parameters
 ENTERPRISE=0
 STANDARD=0
 EXPRESS=0
+FREE=0
+PATCHING=0
+BASE_ONLY=0
 # Obtaining the latest version to build
-VERSION="$(ls -1rd *.*.* | sed -n 1p)"
+VERSION="$(find -- *.*.* -type d | tail -n 1)"
 SKIPMD5=0
 declare -a BUILD_OPTS
 MIN_DOCKER_VERSION="17.09"
@@ -123,7 +129,7 @@ if [ "$#" -eq 0 ]; then
   exit 1;
 fi
 
-while getopts "hesxiv:t:o:" optname; do
+while getopts "hesxfiv:t:o:pb" optname; do
   case "${optname}" in
     "h")
       usage
@@ -140,6 +146,15 @@ while getopts "hesxiv:t:o:" optname; do
       ;;
     "x")
       EXPRESS=1
+      ;;
+    "f")
+      FREE=1
+      ;;
+    "p")
+      PATCHING=1
+      ;;
+    "b")
+      BASE_ONLY=1
       ;;
     "v")
       VERSION="${OPTARG}"
@@ -164,8 +179,20 @@ done
 # Check that we have a container runtime installed
 checkContainerRuntime
 
+# Only 19c EE is supported on ARM64 platform
+if [ "$(arch)" == "aarch64" ] || [ "$(arch)" == "arm64" ]; then
+  BUILD_OPTS=("--build-arg" "BASE_IMAGE=oraclelinux:8" "${BUILD_OPTS[@]}")
+  PLATFORM=".arm64"
+  if { [ "${VERSION}" == "19.3.0" ] && [ "${ENTERPRISE}" -eq 1 ]; }; then
+    BUILD_OPTS=("--build-arg" "INSTALL_FILE_1=LINUX.ARM64_1919000_db_home.zip" "${BUILD_OPTS[@]}")
+  else
+    echo "Currently only 19c enterprise edition is supported on ARM64 platform.";
+    exit 1;
+  fi;
+fi;
+
 # Which Edition should be used?
-if [ $((ENTERPRISE + STANDARD + EXPRESS)) -gt 1 ]; then
+if [ $((ENTERPRISE + STANDARD + EXPRESS + FREE)) -gt 1 ]; then
   usage
 elif [ ${ENTERPRISE} -eq 1 ]; then
   EDITION="ee"
@@ -185,17 +212,14 @@ elif [ ${EXPRESS} -eq 1 ]; then
     echo "Version ${VERSION} does not have Express Edition available.";
     exit 1;
   fi;
-fi;
-
-# Which Dockerfile should be used?
-if [ "${VERSION}" == "12.1.0.2" ] || [ "${VERSION}" == "11.2.0.2" ] || [ "${VERSION}" == "18.4.0" ] || { [ "${VERSION}" == "21.3.0" ] && [ "${EDITION}" == "xe" ]; }; then
-  DOCKERFILE="${DOCKERFILE}.${EDITION}"
-fi;
-
-# Oracle Database image Name
-# If provided using -t build option then use it; Otherwise, create with version and edition
-if [ -z "${IMAGE_NAME}" ]; then
-  IMAGE_NAME="oracle/database:${VERSION}-${EDITION}"
+elif [ ${FREE} -eq 1 ]; then 
+  if [ "$(cut -f1 -d.  <<< "$VERSION" )" -lt 23 ]; then 
+    echo "Version ${VERSION} does not have Free Edition available.";
+    exit 1;
+  else 
+    EDITION="free"
+    SKIPMD5=1
+  fi;
 fi;
 
 # Go into version folder
@@ -204,7 +228,23 @@ cd "${VERSION}" || {
   exit 1;
 }
 
-if [ ! "${SKIPMD5}" -eq 1 ]; then
+# Which Dockerfile should be used?
+if [ "${VERSION}" == "12.1.0.2" ] || [ "${VERSION}" == "11.2.0.2" ] || [ "${VERSION}" == "18.4.0" ] || [ "${VERSION}" == "23.3.0" ] || { [ "${VERSION}" == "21.3.0" ] && [ "${EDITION}" == "xe" ]; }; then
+  DOCKERFILE=$( if [[ -f "Containerfile.${EDITION}" ]]; then echo "Containerfile.${EDITION}"; else echo "${DOCKERFILE}.${EDITION}";fi )
+fi;
+
+echo "$DOCKERFILE"
+
+# Oracle Database image Name
+# If provided using -t build option then use it; Otherwise, create with version and edition
+if [ -z "${IMAGE_NAME}" ]; then
+  IMAGE_NAME="oracle/database:${VERSION}-${EDITION}"
+  if [ ${BASE_ONLY} -eq 1 ]; then
+    IMAGE_NAME="oracle/database:${VERSION}-base"
+  fi
+fi;
+
+if [ ${BASE_ONLY} -eq 0 ] && [ ! "${SKIPMD5}" -eq 1 ]; then
   checksumPackages
 else
   echo "Ignored MD5 checksum."
@@ -240,6 +280,35 @@ if [ ${#PROXY_SETTINGS[@]} -gt 0 ]; then
   echo "Proxy settings were found and will be used during the build."
 fi
 
+if [ ${PATCHING} -eq 1 ]; then
+  # Setting SLIMMING to false to support patching
+  BUILD_OPTS=("${BUILD_OPTS[@]}" "--build-arg" "SLIMMING=false" )
+fi
+
+if [ ! -e "${DOCKERFILE}" ]; then
+  echo "ERROR: ${DOCKERFILE} doesn't exist"
+  exit 1
+fi
+
+# ############################# #
+# BUILDING THE BASE STAGE IMAGE #
+# ############################# #
+
+if [ ${BASE_ONLY} -eq 1 ]; then
+  echo "Building base stage image '${IMAGE_NAME}' ..."
+  # BUILD THE BASE STAGE IMAGE (replace all environment variables)
+  "${CONTAINER_RUNTIME}" build --force-rm=true \
+        "${BUILD_OPTS[@]}" "${PROXY_SETTINGS[@]}" --target base \
+        -t "${IMAGE_NAME}" -f "${DOCKERFILE}" . || {
+    echo ""
+    echo "ERROR: Base stage image was NOT successfully created."
+    exit 1
+  }
+  # Remove dangling images (intermitten images with tag <none>)
+  yes | "${CONTAINER_RUNTIME}" image prune > /dev/null || true
+  exit
+fi
+
 # ################## #
 # BUILDING THE IMAGE #
 # ################## #
@@ -248,8 +317,8 @@ echo "Building image '${IMAGE_NAME}' ..."
 # BUILD THE IMAGE (replace all environment variables)
 BUILD_START=$(date '+%s')
 "${CONTAINER_RUNTIME}" build --force-rm=true --no-cache=true \
-       "${BUILD_OPTS[@]}" "${PROXY_SETTINGS[@]}" --build-arg DB_EDITION=${EDITION} \
-       -t "${IMAGE_NAME}" -f "${DOCKERFILE}" . || {
+      "${BUILD_OPTS[@]}" "${PROXY_SETTINGS[@]}" --build-arg DB_EDITION="${EDITION}" \
+      -t "${IMAGE_NAME}" -f "${DOCKERFILE}" . || {
   echo ""
   echo "ERROR: Oracle Database container image was NOT successfully created."
   echo "ERROR: Check the output and correct any reported problems with the build operation."
@@ -257,7 +326,7 @@ BUILD_START=$(date '+%s')
 }
 
 # Remove dangling images (intermitten images with tag <none>)
-yes | "${CONTAINER_RUNTIME}" image prune > /dev/null
+yes | "${CONTAINER_RUNTIME}" image prune > /dev/null || true
 
 BUILD_END=$(date '+%s')
 BUILD_ELAPSED=$(( BUILD_END - BUILD_START ))
@@ -273,3 +342,8 @@ cat << EOF
   Build completed in ${BUILD_ELAPSED} seconds.
   
 EOF
+
+# EXTEND THE BUILT IMAGE BY APPLYING PATCHING EXTENSION
+if [ ${PATCHING} -eq 1 ]; then
+  ../../extensions/buildExtensions.sh -b "${IMAGE_NAME}" -t "${IMAGE_NAME}"-ext -v "${VERSION}" -x 'patching'
+fi
